@@ -1,0 +1,118 @@
+name: PR Merge Client Dev Preview
+
+on:
+  pull_request_target:
+    types: [closed]
+    paths: 
+      - "packages/client/**"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  dev-deploy:
+    if: github.event.pull_request.merged == true
+    strategy:
+      matrix:
+        platform: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Windows dependencies
+        if: matrix.platform == 'windows-latest'
+        run: |
+          # 安装 WebView2 运行时 [2](@ref)
+          curl -LO https://go.microsoft.com/fwlink/p/?LinkId=2124703
+          ./MicrosoftEdgeWebview2Setup.exe /silent /install
+          
+          # 配置 Wix 工具链 [1](@ref)
+          mkdir -p "${{ github.workspace }}/.tauri/WixTools314"
+          curl -L https://github.com/tauri-apps/binary-releases/releases/download/wix-3.14.0/wix314-binaries.zip -o wix.zip
+          unzip wix.zip -d "${{ github.workspace }}/.tauri/WixTools314"
+
+      - name: Get Merge Commit SHA
+        run: echo "COMMIT_SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+
+      - name: Set Node.js environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: yarn
+
+      - name: Install project dependencies
+        working-directory: ./packages/client
+        run: yarn install
+
+      - name: Build Tauri Application
+        working-directory: ./packages/client
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 动态设置目标架构 [2](@ref)
+          if [ "${{ matrix.platform }}" = "macos-latest" ]; then
+            cargo tauri build --target aarch64-apple-darwin
+          else
+            cargo tauri build --target x86_64-pc-windows-msvc
+          fi
+
+      - name: Package artifacts
+        shell: bash
+        run: |
+          cd packages/client/src-tauri/target/release
+          if [ "${{ matrix.platform }}" = "macos-latest" ]; then
+            tar czf ${{ env.PACKAGE_NAME }}.tar.gz *.app
+          else
+            7z a ${{ env.PACKAGE_NAME }}.zip *.exe
+          fi
+
+      - name: Upload Release Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.PACKAGE_NAME }}-${{ matrix.platform }}
+          path: |
+            packages/client/src-tauri/target/release/*.zip
+            packages/client/src-tauri/target/release/*.tar.gz
+
+      - name: Update PR Comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              issue_number: context.issue.number
+            });
+
+            const artifactLinks = {
+              'windows-latest': `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}?check_suite_focus=true#artifacts`,
+              'macos-latest': `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}?check_suite_focus=true#artifacts`
+            };
+
+            const commentBody = `## 🚀 Client Dev Preview Build
+            ### Platform: ${{ matrix.platform }}
+            ✅ Build succeeded! Download links:
+            - Artifact: ${artifactLinks['${{ matrix.platform }}']}
+            - Commit SHA: \`${{ env.COMMIT_SHORT_SHA }}\``;
+
+            const existingComment = comments.find(c => c.body.includes('Client Dev Preview Build'));
+            
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                comment_id: existingComment.id,
+                body: existingComment.body + `\n\n${commentBody}`
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+            }
