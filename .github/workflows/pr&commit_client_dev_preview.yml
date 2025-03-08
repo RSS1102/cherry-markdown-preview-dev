@@ -1,4 +1,4 @@
-name: PR Merge Client Dev Preview
+name: PR Merge Client Dev Preview (Windows Only)
 
 on:
   pull_request_target:
@@ -15,11 +15,7 @@ permissions:
 jobs:
   dev-deploy:
     if: github.event.pull_request.merged == true
-    strategy:
-      matrix:
-        platform: [windows-latest, macos-latest]
-      fail-fast: false  # 禁用快速失败策略[3](@ref)
-    runs-on: ${{ matrix.platform }}
+    runs-on: windows-latest  # 仅保留 Windows 环境
 
     steps:
       - name: Checkout
@@ -29,11 +25,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Windows dependencies
-        if: matrix.platform == 'windows-latest'
         run: |
+          # 安装 WebView2 运行时
           curl -LO https://go.microsoft.com/fwlink/p/?LinkId=2124703 || exit 1
           ./MicrosoftEdgeWebview2Setup.exe /silent /install || exit 1
           
+          # 配置 Wix 工具链
           mkdir -p "${{ github.workspace }}/.tauri/WixTools314"
           curl -L https://github.com/tauri-apps/binary-releases/releases/download/wix-3.14.0/wix314-binaries.zip -o wix.zip
           unzip wix.zip -d "${{ github.workspace }}/.tauri/WixTools314"
@@ -55,26 +52,19 @@ jobs:
         working-directory: ./packages/client
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ "${{ matrix.platform }}" = "macos-latest" ]; then
-            cargo tauri build --target aarch64-apple-darwin
-            cd src-tauri/target/release/bundle/macos
-            tar czf ${{ env.PACKAGE_NAME }}.tar.gz *.app  # 显式压缩.app文件[3](@ref)
-          else
-            cargo tauri build --target x86_64-pc-windows-msvc
-          fi
+        run: cargo tauri build --target x86_64-pc-windows-msvc
 
-      - name: Upload Release Artifacts
-        uses: actions/upload-artifact@v4  # 升级至v4并包含隐藏文件[3](@ref)
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PACKAGE_NAME }}-${{ matrix.platform }}
-          path: |
-            packages/client/src-tauri/target/release/bundle/**
-          include-hidden-files: true
+          name: client-windows-build
+          path: packages/client/src-tauri/target/release/bundle/msi/*.msi  # 修正为 Tauri 默认的 MSI 路径
 
-      - name: Update PR Comment
+      - name: Update PR Comment with Artifact Link
         if: always()
         uses: actions/github-script@v7
+        env:
+          ARTIFACT_NAME: client-windows-build
         with:
           script: |
             const { data: comments } = await github.rest.issues.listComments({
@@ -82,23 +72,20 @@ jobs:
               issue_number: context.issue.number
             });
 
-            const artifactLinks = {
-              'windows-latest': `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}?check_suite_focus=true#artifacts`,
-              'macos-latest': `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}?check_suite_focus=true#artifacts`
-            };
+            // 获取 Artifact 下载链接
+            const artifactUrl = `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}?check_suite_focus=true#artifacts`;
 
-            const commentBody = `## 🚀 Client Dev Preview Build
-            ### Platform: ${{ matrix.platform }}
-            ✅ Build succeeded! Download links:
-            - Artifact: ${artifactLinks['${{ matrix.platform }}']}
+            const commentBody = `## 🚀 Windows 构建结果
+            ✅ 构建成功！下载链接：
+            - Artifact: [${process.env.ARTIFACT_NAME}](${artifactUrl})
             - Commit SHA: \`${{ env.COMMIT_SHORT_SHA }}\``;
 
-            const existingComment = comments.find(c => c.body.includes('Client Dev Preview Build'));
+            const existingComment = comments.find(c => c.body.includes('Windows 构建结果'));
             
             if (existingComment) {
               await github.rest.issues.updateComment({
                 comment_id: existingComment.id,
-                body: existingComment.body + `\n\n${commentBody}`
+                body: commentBody
               });
             } else {
               await github.rest.issues.createComment({
