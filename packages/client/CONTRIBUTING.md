@@ -31,7 +31,7 @@ Clone this repo to your local machine and install the dependencies.
 
 ```shell
 pnpm install
-```
+```1
 
 > [!TIP]
 > If you are using another package manager, you need to pay attention to [`client/tauri.conf.json`](./tauri.conf.json) configuration.
