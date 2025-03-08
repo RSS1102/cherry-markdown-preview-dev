@@ -13,83 +13,94 @@ permissions:
   actions: read
 
 jobs:
-  dev-deploy:
-    if: github.event.pull_request.merged == true
-    runs-on: windows-latest  # 仅保留 Windows 环境
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            args: "--target x86_64-apple-darwin"
+          - platform: ubuntu-latest
+            target: ""
+            args: ""
+          - platform: windows-latest
+            target: ""
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Windows dependencies
-        run: |
-          # 安装 WebView2 运行时
-          curl -LO https://go.microsoft.com/fwlink/p/?LinkId=2124703 || exit 1
-          ./MicrosoftEdgeWebview2Setup.exe /silent /install || exit 1
-          
-          # 配置 Wix 工具链
-          mkdir -p "${{ github.workspace }}/.tauri/WixTools314"
-          curl -L https://github.com/tauri-apps/binary-releases/releases/download/wix-3.14.0/wix314-binaries.zip -o wix.zip
-          unzip wix.zip -d "${{ github.workspace }}/.tauri/WixTools314"
-
-      - name: Get Merge Commit SHA
-        run: echo "COMMIT_SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-
-      - name: Set Node.js environment
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: yarn
+          node-version: lts/*
 
-      - name: Install project dependencies
-        working-directory: ./packages/client
-        run: yarn install
-
-      - name: Build Tauri Application
-        working-directory: ./packages/client
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: cargo tauri build --target x86_64-pc-windows-msvc
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          name: client-windows-build
-          path: packages/client/src-tauri/target/release/bundle/msi/*.msi  # 修正为 Tauri 默认的 MSI 路径
+          # This ensures the target is installed if it's not empty.
+          target: ${{ matrix.target }}
+          toolchain: stable
 
-      - name: Update PR Comment with Artifact Link
-        if: always()
-        uses: actions/github-script@v7
-        env:
-          ARTIFACT_NAME: client-windows-build
+      - name: Ensure x86_64 Target is Installed
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: rustup target add x86_64-apple-darwin
+
+      - name: Install Linux Dependencies
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Build Tauri
+        run: |
+          yarn --network-timeout 100000
+          yarn build
+          yarn build:client ${{ matrix.args }}
+
+      - name: Upload macOS Release Asset (aarch64-apple-darwin)
+        if: matrix.platform == 'macos-latest' &&  matrix.target == 'aarch64-apple-darwin'
+        uses: AButler/upload-release-assets@v3.0
         with:
-          script: |
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              issue_number: context.issue.number
-            });
+          files: |
+            packages/client/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          release-tag: "@cherry-markdown/client@${{ inputs.client_version }}"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload macOS Release Asset (x86_64-apple-darwin)
+        if: matrix.platform == 'macos-latest' &&  matrix.target == 'x86_64-apple-darwin'
+        uses: AButler/upload-release-assets@v3.0
+        with:
+          files: |
+            packages/client/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+          release-tag: "@cherry-markdown/client@${{ inputs.client_version }}"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            // 获取 Artifact 下载链接
-            const artifactUrl = `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}?check_suite_focus=true#artifacts`;
+      - name: Upload Linux Release Asset
+        if: matrix.platform == 'ubuntu-latest'
+        uses: AButler/upload-release-assets@v3.0
+        with:
+          files: |
+            packages/client/src-tauri/target/release/bundle/deb/*.deb;
+            packages/client/src-tauri/target/release/bundle/rpm/*.rpm;
+            packages/client/src-tauri/target/release/bundle/appimage/*.AppImage
+          release-tag: "@cherry-markdown/client@${{ inputs.client_version }}"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            const commentBody = `## 🚀 Windows 构建结果
-            ✅ 构建成功！下载链接：
-            - Artifact: [${process.env.ARTIFACT_NAME}](${artifactUrl})
-            - Commit SHA: \`${{ env.COMMIT_SHORT_SHA }}\``;
-
-            const existingComment = comments.find(c => c.body.includes('Windows 构建结果'));
-            
-            if (existingComment) {
-              await github.rest.issues.updateComment({
-                comment_id: existingComment.id,
-                body: commentBody
-              });
-            } else {
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                body: commentBody
-              });
-            }
+      - name: Upload Windows Release Asset
+        if: matrix.platform == 'windows-latest'
+        uses: AButler/upload-release-assets@v3.0
+        with:
+          files: |
+            packages/client/src-tauri/target/release/bundle/msi/*.msi;
+            packages/client/src-tauri/target/release/bundle/nsis/*.exe
+          release-tag: "@cherry-markdown/client@${{ inputs.client_version }}"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
