@@ -57,7 +57,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 动态设置目标架构 [2](@ref)
+          # 动态设置目标架构
           if [ "${{ matrix.platform }}" = "macos-latest" ]; then
             cargo tauri build --target aarch64-apple-darwin
           else
