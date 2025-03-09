@@ -65,6 +65,38 @@ jobs:
           yarn build
           yarn build:client ${{ matrix.args }}
 
+      # ========== 新增路径打印步骤 ========== [3,5](@ref)
+      - name: Print Artifact Paths
+        shell: bash
+        run: |
+          BUILD_DIR="src-tauri/target/${{ matrix.target }}/release"
+          echo "=== ${{ matrix.platform }} 构建路径 ==="
+          
+          # 路径存在性校验
+          if [ ! -d "$BUILD_DIR" ]; then
+            echo "❌ 错误: $BUILD_DIR 目录不存在"
+            exit 1
+          fi
+
+          # 列出详细文件信息
+          echo "📁 目录内容:"
+          ls -lha "$BUILD_DIR"
+
+          # 识别主程序文件
+          case ${{ matrix.platform }} in
+            windows-latest)
+              EXECUTABLE=$(ls "$BUILD_DIR" | grep '.exe$' | head -1)
+              ;;
+            macos-latest)
+              EXECUTABLE=$(ls "$BUILD_DIR" | grep '.app$' | head -1)
+              ;;
+            ubuntu-latest)
+              EXECUTABLE=$(ls "$BUILD_DIR" | grep -v '\.' | head -1)
+              ;;
+          esac
+          
+          echo "🔍 主程序路径: $BUILD_DIR/$EXECUTABLE"
+
       - name: Zip Artifacts
         shell: bash
         run: |
@@ -106,7 +138,7 @@ jobs:
               repo: context.repo.repo,
               run_id: context.runId,
             });
-            const artifactList = data.artifacts.map(art => `- ​**${art.name}**`).join('\n');
+            const artifactList = data.artifacts.map(art => `- **${art.name}**`).join('\n');
             return artifactList;
 
       - name: Create PR Comment
