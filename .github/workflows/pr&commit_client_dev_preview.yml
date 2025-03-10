@@ -1,10 +1,14 @@
 name: PR Merge Client Dev Preview (Windows Only)
 
 on:
-  pull_request_target:
-    types: [closed]
-    paths: 
-      - "packages/client/**"
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  # pull_request_target:
+  #   types: [closed]
+  #   paths: 
+  #     - "packages/client/**"
 
 permissions:
   contents: write
@@ -67,6 +71,7 @@ jobs:
 
       # ========== 新增路径打印步骤 ========== [3,5](@ref)
       - name: Print Artifact Paths
+        working-directory: ./packages/cclient
         shell: bash
         run: |
           BUILD_DIR="src-tauri/target"
