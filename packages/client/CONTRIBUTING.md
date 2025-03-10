@@ -10,7 +10,7 @@ The easiest way to contribute documentation to this project is to follow these s
 2. Clone the newly forked repo from your GitHub acco2unt.22
 3. Create a new branch to add your work to, i.e. git checkout -b client/feat/xxx.
 4. Make your changes and commit them
-5. Push the branch to your fork
+5. Push the branch to your fork2
 6. Go to <https://github.com/Tencent/cherry-markdown/pulls>, there should be a "Compare & Pull Request" button, where you can3 create a PR.
 
 ### Setup (locally)
