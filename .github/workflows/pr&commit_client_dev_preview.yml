@@ -74,13 +74,20 @@ jobs:
         working-directory: ./packages/client
         shell: bash
         run: |
+          # 动态安装 tree 命令
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y tree
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            brew install tree
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            choco install tree -y
+          fi
+      
+          # 输出目录树
           BUILD_DIR="src-tauri/target"
-          
-          # 检查目录是否存在
           if [ -d "$BUILD_DIR" ]; then
-            # find "$BUILD_DIR" -print  # 递归列出所有路径
-            # ls -R（仅列出文件结构）
-            ls -R "$BUILD_DIR"
+            echo "目录结构："
+            tree "$BUILD_DIR" -a -L 3  # 显示3层目录及隐藏文件
           else
             echo "错误：目录 $BUILD_DIR 不存在！"
             exit 1
