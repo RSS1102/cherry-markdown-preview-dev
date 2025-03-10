@@ -69,86 +69,14 @@ jobs:
       - name: Print Artifact Paths
         shell: bash
         run: |
-          BUILD_DIR="src-tauri/target/${{ matrix.target }}/release"
-          echo "=== ${{ matrix.platform }} 构建路径 ==="
+          BUILD_DIR="src-tauri/target"
           
-          # 路径存在性校验
-          if [ ! -d "$BUILD_DIR" ]; then
-            echo "❌ 错误: $BUILD_DIR 目录不存在"
+          # 检查目录是否存在
+          if [ -d "$BUILD_DIR" ]; then
+            # find "$BUILD_DIR" -print  # 递归列出所有路径
+            # ls -R（仅列出文件结构）
+            ls -R "$BUILD_DIR"
+          else
+            echo "错误：目录 $BUILD_DIR 不存在！"
             exit 1
           fi
-
-          # 列出详细文件信息
-          echo "📁 目录内容:"
-          ls -lha "$BUILD_DIR"
-
-          # 识别主程序文件
-          case ${{ matrix.platform }} in
-            windows-latest)
-              EXECUTABLE=$(ls "$BUILD_DIR" | grep '.exe$' | head -1)
-              ;;
-            macos-latest)
-              EXECUTABLE=$(ls "$BUILD_DIR" | grep '.app$' | head -1)
-              ;;
-            ubuntu-latest)
-              EXECUTABLE=$(ls "$BUILD_DIR" | grep -v '\.' | head -1)
-              ;;
-          esac
-          
-          echo "🔍 主程序路径: $BUILD_DIR/$EXECUTABLE"
-
-      - name: Zip Artifacts
-        shell: bash
-        run: |
-          BUILD_DIR="src-tauri/target/${{ matrix.target }}/release"
-          ZIP_NAME="${{ matrix.platform }}.zip"
-          
-          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
-            cd "$BUILD_DIR"
-            zip -r "${ZIP_NAME}" *.exe
-          elif [[ "${{ matrix.platform }}" == "macos-latest" ]]; then
-            cd "$BUILD_DIR"
-            zip -r "${ZIP_NAME}" *.app
-          else
-            cd "$BUILD_DIR"
-            zip -r "${ZIP_NAME}" *
-          fi
-          mv "${ZIP_NAME}" "${GITHUB_WORKSPACE}/"
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: client-${{ matrix.platform }}
-          path: ${{ github.workspace }}/${{ matrix.platform }}.zip
-
-  notify-pr:
-    runs-on: ubuntu-latest
-    needs: publish-tauri
-    permissions:
-      pull-requests: write
-      actions: read
-    steps:
-      - name: Get Artifacts Info
-        id: artifacts
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const { data } = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
-            });
-            const artifactList = data.artifacts.map(art => `- **${art.name}**`).join('\n');
-            return artifactList;
-
-      - name: Create PR Comment
-        uses: peter-evans/create-or-update-comment@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            ### 🚀 Tauri Build Artifacts
-            Successfully built artifacts for the following platforms:
-            ${{ steps.artifacts.outputs.result }}
-
-            Download them from the [Workflow Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).
