@@ -1,14 +1,14 @@
 name: PR Merge Client Dev Preview
 
 on:
-  push:
-    branches: [main, dev]
-  pull_request:
-    branches: [main, dev]
-  # pull_request_target:
-  #   types: [closed]
-  #   paths: 
-  #     - "packages/client/**"
+  # push:
+  #   branches: [main, dev]
+  # pull_request:
+  #   branches: [main, dev]
+  pull_request_target:
+    types: [closed]
+    paths: 
+      - "packages/client/**"
 
 permissions:
   contents: read
