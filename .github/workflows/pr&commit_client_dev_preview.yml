@@ -1,14 +1,14 @@
 name: PR Merge Client Dev Preview
 
 on:
-  # push:
-  #   branches: [main, dev] 
-  # pull_request:
-  #   branches: [main, dev]
   pull_request_target:
-    types: [closed]
+    types: [closed, merged]
     paths: 
       - "packages/client/**"
+  # push:
+  #   branches: [main]
+  #   paths: 
+  #     - "packages/client/**"  # 补充主分支的推送监听[1](@ref)
 
 permissions:
   contents: read
@@ -73,22 +73,18 @@ jobs:
           yarn build
           yarn build:client
 
-      # 生成唯一标识
       - name: Generate Unique ID
         id: uid
         run: |
           TIMESTAMP=$(date -u +"%Y%m%dT%H%M%S")
           echo "UNIQUE_ID=$TIMESTAMP-${{ github.run_id }}" >> $GITHUB_ENV
 
-      # 动态文件发现
       - name: Find Artifacts
         id: finder
         shell: bash
         run: |
-          # 路径标准化处理
           adjusted_patterns=$(echo "${{ matrix.path_patterns }}" | tr '/' ${{ matrix.platform == 'windows-latest' && '\\' || '/' }})
           
-          # 递归查找文件
           artifact_paths=()
           while IFS= read -r pattern; do
             found_files=$(find . -path "./$pattern" -type f -print 2>/dev/null | sed 's/^\.\///')
@@ -97,12 +93,10 @@ jobs:
             fi
           done <<< "$adjusted_patterns"
 
-          # 输出结果
           echo "paths<<EOF" >> $GITHUB_OUTPUT
           printf "%s\n" "${artifact_paths[@]}" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      # 产物上传
       - name: Upload Artifacts
         if: steps.finder.outputs.paths != ''
         uses: actions/upload-artifact@v4
@@ -112,10 +106,10 @@ jobs:
             ${{ steps.finder.outputs.paths }}
           retention-days: 7
 
-      # PR评论生成
       - name: Create Comment
         if: |
           github.event.pull_request.merged == true &&
+          github.event.pull_request.base.ref == 'main' &&  # 确保合并到主分支[1](@ref)
           steps.finder.outputs.paths != ''
         uses: actions/github-script@v7
         env:
