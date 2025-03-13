@@ -16,7 +16,7 @@ The easiest way to contribute documentation to this project is to follow these s
 ### Setup (locally)
 
 **This client project is developed using Node+rust, so you must first ensure that the development environment is correct.**
-
+11
 - The first step is to [install rust](https://www.rust-lang.org/tools/install).
 - And you need to [install node](https://nodejs.org/) too(It is recommended to use [nvm](https://github.com/nvm-sh/nvm) or [nvm-windows](https://github.com/coreybutler/nvm-windows) to install).
 
