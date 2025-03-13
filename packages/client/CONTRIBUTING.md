@@ -1,7 +1,7 @@
 # Contributing
 
 Excited to hear that you are interested in contributing to this project! Thanks!
-
+1
 ## Documentation
 51
 The easiest way to contribute documentation to this project is to follow these steps:
