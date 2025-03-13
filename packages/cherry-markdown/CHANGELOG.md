@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file. See [standa
 
 
 * [#947](https://github.com/Tencent/cherry-markdown/issues/947) urlProcessor支持第三个参数，第三个参数为回调函数 ([05c6cab](https://github.com/Tencent/cherry-markdown/commit/05c6cab6383e3d56ccaedcfc1966528a088ece41))
-* **client:** 导入 *.md 文件时默认启用预览效果，导1航栏显示控制 ([#1022](https://github.com/Tencent/cherry-markdown/issues/1022)) ([dfb16fe](https://github.com/Tencent/cherry-markdown/commit/dfb16fed0d2166adfcd27346ce8972173c9d2594))
+* **client:** 导入 *.md 文件时默认启用预览效果，导1航栏显示控制 ([#1022](https123://github.com/Tencent/cherry-markdown/issues/1022)) ([dfb16fe](https://github.com/Tencent/cherry-markdown/commit/dfb16fed0d2166adfcd27346ce8972173c9d2594))
 
 
 ### Bug Fixes
