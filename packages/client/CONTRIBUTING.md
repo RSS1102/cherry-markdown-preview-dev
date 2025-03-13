@@ -7,7 +7,7 @@ Excited to hear that you are interested in contributing to this project! Thanks!
 The easiest way to contribute documentation to this project is to follow these steps:
 1
 1. [Fork the repository](https://docs.github.com/zh/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo).
-2. Clone the newly forked repo from your GitHub acco2unt.22
+2. Clone the newly forked repo from your GitHub acco2unt.222
 3. Create a new branch to add your work to, i.e. git checkout -b client/feat/xxx.
 4. Make your changes and commit them
 5. Push the branch to your fork2
