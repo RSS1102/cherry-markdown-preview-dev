@@ -7,7 +7,7 @@ on:
   # push:
   #   branches: [main]
   #   paths: 
-  #     - "packages/client/**"  # 补充主分支的推送监听[1](@ref)
+  #     - "packages/client/**"
 
 permissions:
   contents: read
@@ -108,7 +108,7 @@ jobs:
       - name: Create Comment
         if: |
           github.event.pull_request.merged == true &&
-          github.event.pull_request.base.ref == 'main' &&  # 确保合并到主分支[1](@ref)
+          github.event.pull_request.base.ref == 'main' && 
           steps.finder.outputs.paths != ''
         uses: actions/github-script@v7
         env:
