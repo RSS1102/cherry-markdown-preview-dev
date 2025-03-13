@@ -2,7 +2,6 @@ name: PR Merge Client Dev Preview
 
 on:
   pull_request_target:
-    types: [closed, merged]
     paths: 
       - "packages/client/**"
   # push:
