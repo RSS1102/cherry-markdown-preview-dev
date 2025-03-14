@@ -12,7 +12,7 @@ The easiest way to contribute documentation to this project is to follow these s
 4. Make your changes and commit them
 5. Push the branch to your fork2
 6. Go to <https://github.com/Tencent/cherry-markdown/pulls>, there should be a "Compare & Pull Request" button, where you can3 create a PR.
-
+1
 ### Setup (locally)
 
 **This client project is developed using Node+rust, so you must first ensure that the development environment is correct.**
