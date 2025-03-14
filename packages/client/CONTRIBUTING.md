@@ -14,7 +14,7 @@ The easiest way to contribute documentation to this project is to follow these s
 6. Go to <https://github.com/Tencent/cherry-markdown/pulls>, there should be a "Compare & Pull Request" button, where you can3 create a PR.
 
 ### Setup (locally)
-
+2
 **This client project is developed using Node+rust, so you must first ensure that the development environment is correct.**
 
 - The first step is to [install rust](https://www.rust-lang.org/tools/install).
