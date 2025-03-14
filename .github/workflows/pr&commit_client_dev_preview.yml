@@ -17,79 +17,33 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            target: aarch64-apple-darwin
-            args: "--target aarch64-apple-darwin"
-            path_patterns: |
-              packages/client/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-              packages/client/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
-          - platform: macos-latest
-            target: x86_64-apple-darwin
-            args: "--target x86_64-apple-darwin"
-            path_patterns: |
-              packages/client/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-              packages/client/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
+            path_patterns: "packages/client/**/*.json"
           - platform: windows-latest
-            path_patterns: |
-              packages/client/src-tauri/target/**/release/bundle/msi/*.msi
-              packages/client/src-tauri/target/**/release/bundle/nsis/*.exe
-            args: "--target x86_64-pc-windows-msvc"
+            path_patterns: "packages/client/**/*.json"
           - platform: ubuntu-latest
-            path_patterns: |
-              packages/client/src-tauri/target/**/release/bundle/appimage/*.AppImage
-              packages/client/src-tauri/target/**/release/bundle/deb/*.deb
-            args: "--target x86_64-unknown-linux-gnu"
+            path_patterns: "packages/client/**/*.json"
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          target: ${{ matrix.target }}
-          toolchain: stable
-
-      - name: Ensure x86_64 Target is Installed
-        if: matrix.target == 'x86_64-apple-darwin'
-        run: rustup target add x86_64-apple-darwin
-
-      - name: Install Linux Dependencies
-        if: matrix.platform == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Build Tauri
-        run: |
-          yarn --network-timeout 100000
-          yarn build
-          yarn build:client --target ${{ matrix.target }}
 
       - name: Generate Unique ID
         id: uid
         run: echo "UNIQUE_ID=${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.platform }}" >> $GITHUB_ENV
 
-      - name: Find Artifacts
+      - name: Find JSON Files
         id: finder
         uses: dawidd6/action-find-files@v3
         with:
           directory: .
-          patterns: |
-            ${{ matrix.path_patterns }}
+          patterns: ${{ matrix.path_patterns }}
           find_options: "-type f"
           separator: "\n"
-        env:
-          CASE_INSENSITIVE: ${{ matrix.platform == 'windows-latest' && '1' || '0' }}
-      
+
       - name: Upload Artifacts
         if: ${{ steps.finder.outputs.files != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-${{ env.UNIQUE_ID }}
+          name: json-files-${{ env.UNIQUE_ID }}
           path: ${{ steps.finder.outputs.files }}
           retention-days: 7
 
@@ -107,48 +61,33 @@ jobs:
             const { owner, repo } = context.repo;
             const runId = context.runId;
             
-            // 获取本次运行的所有构件
-            const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
-              owner,
-              repo,
-              run_id: runId,
-            });
-
-            // 如果没有构件则跳过
-            if (artifacts.total_count === 0) {
-              console.log('No artifacts found. Skipping comment.');
-              return;
-            }
-
-            // 构建构件下载页面链接
+            // 获取构件页面链接
             const artifactsUrl = `https://github.com/${owner}/${repo}/actions/runs/${runId}`;
-            const message = `📱 ​**Client Preview Builds Available**\nDownload artifacts for all platforms: [Artifacts Page](${artifactsUrl})`;
-            const marker = '<!-- CLIENT_PREVIEW_MARKER -->';
+            const message = `📁 ​**JSON 文件已生成**\n下载地址：${artifactsUrl}`;
+            const marker = '<!-- JSON_FILES_MARKER -->';
 
-            // 查找已有的评论
+            // 查找/更新评论
             const { data: comments } = await github.rest.issues.listComments({
               owner,
               repo,
               issue_number: context.issue.number,
             });
 
-            // 查找标记评论
             const existingComment = comments.find(comment => comment.body.includes(marker));
-
-            // 创建/更新评论
             const commentBody = `${marker}\n${message}`;
+
             if (existingComment) {
               await github.rest.issues.updateComment({
                 owner,
                 repo,
                 comment_id: existingComment.id,
-                body: commentBody,
+                body: commentBody
               });
             } else {
               await github.rest.issues.createComment({
                 owner,
                 repo,
                 issue_number: context.issue.number,
-                body: commentBody,
+                body: commentBody
               });
             }
