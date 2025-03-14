@@ -2,12 +2,7 @@ name: PR Merge Client Dev Preview
 
 on:
   pull_request_target:
-    paths: 
-      - "packages/client/**"
-  # push:
-  #   branches: [main]
-  #   paths: 
-  #     - "packages/client/**"
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
@@ -88,7 +83,6 @@ jobs:
           find_options: "-type f"
           separator: "\n"
         env:
-          # Windows 需要特殊处理大小写敏感
           CASE_INSENSITIVE: ${{ matrix.platform == 'windows-latest' && '1' || '0' }}
       
       - name: Upload Artifacts
@@ -96,35 +90,65 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-${{ env.UNIQUE_ID }}
-          path: |
-            ${{ steps.finder.outputs.files }}
+          path: ${{ steps.finder.outputs.files }}
           retention-days: 7
 
-      - name: Create Comment
-        if: |
-          github.event.pull_request.merged == true &&
-          github.event.pull_request.base.ref == 'main' && 
-          steps.finder.outputs.paths != ''
-        uses: actions/github-script@v7
-        env:
-          PLATFORM: ${{ matrix.platform }}
-          RUN_ID: ${{ github.run_id }}
-          ARTIFACT_NAME: ${{ matrix.platform }}-${{ env.UNIQUE_ID }}
+  comment-pr:
+    name: Update PR Comment
+    runs-on: ubuntu-latest
+    needs: build-and-comment
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Dynamic PR Comment
+        uses: actions/github-script@v5
         with:
           script: |
-            const comment = `🎉 构建完成！资产已上传
-            ### 平台: ${process.env.PLATFORM}
-            📦 资源包名称: \`${process.env.ARTIFACT_NAME}\`
-            🔗 下载地址: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.RUN_ID}/artifacts
-            ⏱️ 构建时间: \`${new Date().toISOString()}\`
+            const { owner, repo } = context.repo;
+            const runId = context.runId;
             
-            包含以下文件：
-            ${'${{ steps.finder.outputs.paths }}'.split('\n').map(p => `▫️ \`${p}\``).join('\n')}
-            `;
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body: comment
+            // 获取本次运行的所有构件
+            const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner,
+              repo,
+              run_id: runId,
             });
+
+            // 如果没有构件则跳过
+            if (artifacts.total_count === 0) {
+              console.log('No artifacts found. Skipping comment.');
+              return;
+            }
+
+            // 构建构件下载页面链接
+            const artifactsUrl = `https://github.com/${owner}/${repo}/actions/runs/${runId}`;
+            const message = `📱 ​**Client Preview Builds Available**\nDownload artifacts for all platforms: [Artifacts Page](${artifactsUrl})`;
+            const marker = '<!-- CLIENT_PREVIEW_MARKER -->';
+
+            // 查找已有的评论
+            const { data: comments } = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number: context.issue.number,
+            });
+
+            // 查找标记评论
+            const existingComment = comments.find(comment => comment.body.includes(marker));
+
+            // 创建/更新评论
+            const commentBody = `${marker}\n${message}`;
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existingComment.id,
+                body: commentBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: context.issue.number,
+                body: commentBody,
+              });
+            }
