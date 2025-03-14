@@ -25,22 +25,24 @@ jobs:
             target: aarch64-apple-darwin
             args: "--target aarch64-apple-darwin"
             path_patterns: |
-              src-tauri/target/**/release/bundle/dmg/*.dmg
-              src-tauri/target/**/release/bundle/macos/*.app
+              packages/client/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+              packages/client/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
           - platform: macos-latest
             target: x86_64-apple-darwin
             args: "--target x86_64-apple-darwin"
             path_patterns: |
-              src-tauri/target/**/release/bundle/dmg/*.dmg
-              src-tauri/target/**/release/bundle/macos/*.app
+              packages/client/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+              packages/client/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
           - platform: windows-latest
             path_patterns: |
               packages/client/src-tauri/target/**/release/bundle/msi/*.msi
               packages/client/src-tauri/target/**/release/bundle/nsis/*.exe
+            args: "--target x86_64-pc-windows-msvc"
           - platform: ubuntu-latest
             path_patterns: |
               packages/client/src-tauri/target/**/release/bundle/appimage/*.AppImage
               packages/client/src-tauri/target/**/release/bundle/deb/*.deb
+            args: "--target x86_64-unknown-linux-gnu"
 
     steps:
       - uses: actions/checkout@v4
@@ -78,29 +80,24 @@ jobs:
 
       - name: Find Artifacts
         id: finder
-        shell: bash
-        run: |
-          adjusted_patterns=$(echo "${{ matrix.path_patterns }}" | tr '/' ${{ matrix.platform == 'windows-latest' && '\\' || '/' }})
-          
-          artifact_paths=()
-          while IFS= read -r pattern; do
-            found_files=$(find . -path "./$pattern" -type f -print 2>/dev/null | sed 's/^\.\///')
-            if [ -n "$found_files" ]; then
-              artifact_paths+=("$found_files")
-            fi
-          done <<< "$adjusted_patterns"
-
-          echo "paths<<EOF" >> $GITHUB_OUTPUT
-          printf "%s\n" "${artifact_paths[@]}" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
+        uses: dawidd6/action-find-files@v3
+        with:
+          directory: .
+          patterns: |
+            ${{ matrix.path_patterns }}
+          find_options: "-type f"
+          separator: "\n"
+        env:
+          # Windows 需要特殊处理大小写敏感
+          CASE_INSENSITIVE: ${{ matrix.platform == 'windows-latest' && '1' || '0' }}
+      
       - name: Upload Artifacts
-        if: steps.finder.outputs.paths != ''
+        if: ${{ steps.finder.outputs.files != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-${{ env.UNIQUE_ID }}
           path: |
-            ${{ steps.finder.outputs.paths }}
+            ${{ steps.finder.outputs.files }}
           retention-days: 7
 
       - name: Create Comment
