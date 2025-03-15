@@ -1,60 +1,60 @@
-name: PR Merge Client Dev Preview
+name: Auto Upload JSON Files
 
 on:
-  push: # 改为 push 事件触发[1](@ref)
-    branches: [main] # 指定触发分支（可按需调整）
+  push: 
+    branches: [ main ]  # 触发分支设置（可根据需要修改）
 
 permissions:
-  contents: write
+  contents: write  # 精简权限配置[2,3](@ref)
 
 jobs:
-  build-and-comment:
+  find-and-upload:
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
-            path_patterns: "packages/client/*.json"
-          - platform: windows-latest
-            path_patterns: "packages/client/*.json"
           - platform: ubuntu-latest
-            path_patterns: "packages/client/*.json"
+            search_path: "packages/client/**/*.json"
+          - platform: windows-latest
+            search_path: "packages/client/**/*.json"
+          - platform: macos-latest
+            search_path: "packages/client/**/*.json"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4  # 代码检出（网页2/3/8共同推荐）
 
-      - name: Generate Unique ID
-        id: uid
-        run: echo "UNIQUE_ID=${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.platform }}" >> $GITHUB_ENV
-
-      - name: Find JSON Files
-        id: finder
+      - name: Locate JSON Files
+        id: file-finder
         uses: dawidd6/action-find-files@v3
         with:
           directory: .
-          patterns: ${{ matrix.path_patterns }}
-          find_options: "-type f"
+          patterns: ${{ matrix.search_path }}
+          find_options: "-type f -print"
           separator: "\n"
 
-      # 新增路径打印步骤
-      - name: Print File Paths
-        if: ${{ steps.finder.outputs.files != '' }}
+      - name: Display File Paths  # 新增路径打印
+        if: ${{ steps.file-finder.outputs.files != '' }}
         run: |
-          echo "Found JSON files:"
-          echo "${{ steps.finder.outputs.files }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  发现JSON文件路径清单"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "${{ steps.file-finder.outputs.files }}" | tr '\n' ' '
+          echo "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Upload Artifacts
-        if: ${{ steps.finder.outputs.files != '' }}
+        if: ${{ steps.file-finder.outputs.files != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: json-files-${{ env.UNIQUE_ID }}
-          path: ${{ steps.finder.outputs.files }}
-          retention-days: 7
+          name: json-${{ matrix.platform }}-${{ github.run_id }}
+          path: ${{ steps.file-finder.outputs.files }}
+          retention-days: 3  # 缩短保留周期（网页8建议优化存储）
 
-      # 新增构件路径输出步骤
-      - name: Show Artifact Paths
-        if: ${{ steps.finder.outputs.files != '' }}
+      - name: Show Artifact Info  # 新增构件信息展示
+        if: ${{ steps.file-finder.outputs.files != '' }}
         run: |
-          echo "Artifact uploaded at:"
-          echo "
+          echo "╭──────────────────────────────────────╮"
+          echo "│  构件已上传至 GitHub Actions 面板     │"
+          echo "│  访问路径：                           │"
+          echo "│  https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "╰──────────────────────────────────────╯"
