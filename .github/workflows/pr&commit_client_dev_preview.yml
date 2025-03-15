@@ -1,60 +1,81 @@
-name: Auto Upload JSON Files
+name: Auto Process JSON Files
 
 on:
-  push: 
-    branches: [ main ]  # 触发分支设置（可根据需要修改）
+  push:
+    branches: [ main ]  # 触发分支设置
 
 permissions:
-  contents: write  # 精简权限配置[2,3](@ref)
+  contents: read  # 最小权限原则
 
 jobs:
-  find-and-upload:
+  file-processing:
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: ubuntu-latest
+            shell: bash
             search_path: "packages/client/**/*.json"
           - platform: windows-latest
+            shell: pwsh
             search_path: "packages/client/**/*.json"
           - platform: macos-latest
+            shell: bash
             search_path: "packages/client/**/*.json"
 
     steps:
-      - uses: actions/checkout@v4  # 代码检出（网页2/3/8共同推荐）
+      - uses: actions/checkout@v4
 
-      - name: Locate JSON Files
-        id: file-finder
-        uses: dawidd6/action-find-files@v3
-        with:
-          directory: .
-          patterns: ${{ matrix.search_path }}
-          find_options: "-type f -print"
-          separator: "\n"
-
-      - name: Display File Paths  # 新增路径打印
-        if: ${{ steps.file-finder.outputs.files != '' }}
+      # 跨平台文件查找（替代第三方Action）
+      - name: Locate Target Files
+        id: file_locator
+        shell: ${{ matrix.shell }}
         run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  发现JSON文件路径清单"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "${{ steps.file-finder.outputs.files }}" | tr '\n' ' '
-          echo "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "开始扫描路径: ${{ matrix.search_path }}"
+          
+          # Linux/macOS 使用find命令
+          if [[ "${{ runner.os }}" == "Linux" || "${{ runner.os }}" == "macOS" ]]; then
+            files=$(find packages/client -type f -name "*.json" | tr '\n' ' ')
+          
+          # Windows 使用PowerShell命令
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            files=$(Get-ChildItem -Path ${{ matrix.search_path }} -Recurse | % { $_.FullName }) | Out-String
+          fi
 
+          # 标准化输出路径
+          normalized_files=$(echo "$files" | sed 's/\/\//\//g')
+          echo "files=${normalized_files}" >> $GITHUB_OUTPUT
+          echo "发现文件列表："
+          echo "$normalized_files"
+
+      # 增强型路径显示
+      - name: Display File Paths
+        if: ${{ steps.file_locator.outputs.files != '' }}
+        run: |
+          echo "┌───────────────────────────────────────────┐"
+          echo "│  发现以下JSON文件（${{ runner.os }}平台）  │"
+          echo "├───────────────────────────────────────────┤"
+          echo "${{ steps.file_locator.outputs.files }}" | tr ' ' '\n'
+          echo "└───────────────────────────────────────────┘"
+
+      # 构件上传与日志输出
       - name: Upload Artifacts
-        if: ${{ steps.file-finder.outputs.files != '' }}
+        if: ${{ steps.file_locator.outputs.files != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: json-${{ matrix.platform }}-${{ github.run_id }}
-          path: ${{ steps.file-finder.outputs.files }}
-          retention-days: 3  # 缩短保留周期（网页8建议优化存储）
+          name: json-files-${{ runner.os }}-${{ github.run_number }}
+          path: ${{ steps.file_locator.outputs.files }}
+          retention-days: 3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Show Artifact Info  # 新增构件信息展示
-        if: ${{ steps.file-finder.outputs.files != '' }}
+      # 构件信息展示
+      - name: Show Artifact Details
+        if: ${{ steps.file_locator.outputs.files != '' }}
         run: |
-          echo "╭──────────────────────────────────────╮"
-          echo "│  构件已上传至 GitHub Actions 面板     │"
-          echo "│  访问路径：                           │"
-          echo "│  https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          echo "╰──────────────────────────────────────╯"
+          echo "╔══════════════════════════════════════════╗"
+          echo "║  构件已成功上传至以下路径                 ║"
+          echo "║  GitHub Actions 运行页面:                ║"
+          echo "║  https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "╚══════════════════════════════════════════╝"
