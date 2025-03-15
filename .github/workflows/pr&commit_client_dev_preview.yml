@@ -1,4 +1,4 @@
-name: Cross-Platform File Processor
+name: Cross-Platform JSON Processor
 
 on:
   push:
@@ -13,41 +13,43 @@ jobs:
         include:
           - platform: ubuntu-latest
             shell: bash
-            search_path: "packages/client/**/*.json"
+            search_path: "packages/client"
           - platform: windows-latest
             shell: pwsh
-            search_path: "packages/client/**/*.json"
+            search_path: "packages/client"
           - platform: macos-latest
             shell: bash
-            search_path: "packages/client/**/*.json"
+            search_path: "packages/client"
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Locate Files
+      # 文件查找步骤（修复矩阵变量引用）
+      - name: Locate JSON Files
         id: find_files
         shell: ${{ matrix.shell }}
         run: |
-          echo "扫描路径: ${{ matrix.search_path }}"
+          echo "🕵️ 正在扫描路径: ${{ matrix.search_path }}"
           
-          # Linux/macOS 使用find命令
+          # 跨平台兼容命令（根据网页3和网页5最佳实践）
           if [[ "${{ runner.os }}" == "Linux" || "${{ runner.os }}" == "macOS" ]]; then
-            files=$(find packages/client -type f -name "*.json" | tr '\n' ' ')
-          
-          # Windows 使用PowerShell命令
+            files=$(find ${{ matrix.search_path }} -type f -name "*.json" | tr '\n' ' ')
           elif [[ "${{ runner.os }}" == "Windows" ]]; then
-            files=$(Get-ChildItem -Path ${{ matrix.search_path }} -Recurse | % { $_.FullName }) | Out-String
+            files=$(Get-ChildItem -Path "${{ matrix.search_path }}" -Filter *.json -Recurse | % { $_.FullName })
+            files=$($files -join " ")
           fi
 
-          # 标准化输出路径
-          normalized_files=$(echo "$files" | sed 's/\/\//\//g')
+          # 标准化路径输出（网页8建议）
+          normalized_files=$(echo "$files" | sed 's/\\/\//g' | sed 's/\/\//\//g')
           echo "files=${normalized_files}" >> $GITHUB_OUTPUT
-          echo "发现文件数量: $(echo "$normalized_files" | wc -w)"
+          echo "✅ 发现 ${#files[@]} 个JSON文件"
 
-      - name: Upload Artifacts
-        if: ${{ steps.find_files.outputs.files != '' }}
+      # 构件上传步骤（修复条件判断）
+      - name: Upload JSON Files
+        if: ${{ !contains(matrix.platform, 'windows') || steps.find_files.outputs.files != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: json-files-${{ matrix.platform }}-${{ github.run_number }}
-          path: ${{ steps.find_files.outputs.files }}
+          name: json-${{ matrix.platform }}-${{ github.run_number }}
+          path: ${{ fromJSON(format('["{0}"]', steps.find_files.outputs.files)) }}
           retention-days: 3
+          if-no-files-found: warn
