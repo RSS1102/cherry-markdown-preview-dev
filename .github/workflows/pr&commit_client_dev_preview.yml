@@ -1,11 +1,8 @@
-name: Auto Process JSON Files
+name: Cross-Platform File Processor
 
 on:
   push:
-    branches: [ main ]  # 触发分支设置
-
-permissions:
-  contents: read  # 最小权限原则
+    branches: [ main ]
 
 jobs:
   file-processing:
@@ -27,12 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 跨平台文件查找（替代第三方Action）
-      - name: Locate Target Files
-        id: file_locator
+      - name: Locate Files
+        id: find_files
         shell: ${{ matrix.shell }}
         run: |
-          echo "开始扫描路径: ${{ matrix.search_path }}"
+          echo "扫描路径: ${{ matrix.search_path }}"
           
           # Linux/macOS 使用find命令
           if [[ "${{ runner.os }}" == "Linux" || "${{ runner.os }}" == "macOS" ]]; then
@@ -46,36 +42,12 @@ jobs:
           # 标准化输出路径
           normalized_files=$(echo "$files" | sed 's/\/\//\//g')
           echo "files=${normalized_files}" >> $GITHUB_OUTPUT
-          echo "发现文件列表："
-          echo "$normalized_files"
+          echo "发现文件数量: $(echo "$normalized_files" | wc -w)"
 
-      # 增强型路径显示
-      - name: Display File Paths
-        if: ${{ steps.file_locator.outputs.files != '' }}
-        run: |
-          echo "┌───────────────────────────────────────────┐"
-          echo "│  发现以下JSON文件（${{ runner.os }}平台）  │"
-          echo "├───────────────────────────────────────────┤"
-          echo "${{ steps.file_locator.outputs.files }}" | tr ' ' '\n'
-          echo "└───────────────────────────────────────────┘"
-
-      # 构件上传与日志输出
       - name: Upload Artifacts
-        if: ${{ steps.file_locator.outputs.files != '' }}
+        if: ${{ steps.find_files.outputs.files != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: json-files-${{ runner.os }}-${{ github.run_number }}
-          path: ${{ steps.file_locator.outputs.files }}
+          name: json-files-${{ matrix.platform }}-${{ github.run_number }}
+          path: ${{ steps.find_files.outputs.files }}
           retention-days: 3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 构件信息展示
-      - name: Show Artifact Details
-        if: ${{ steps.file_locator.outputs.files != '' }}
-        run: |
-          echo "╔══════════════════════════════════════════╗"
-          echo "║  构件已成功上传至以下路径                 ║"
-          echo "║  GitHub Actions 运行页面:                ║"
-          echo "║  https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          echo "╚══════════════════════════════════════════╝"
